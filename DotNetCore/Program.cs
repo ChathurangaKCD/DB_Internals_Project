@@ -101,18 +101,21 @@ namespace DotNetCore
 
         private static void RunTestCases()
         {
-            int[] testLengthArr = { 100, 1000, 10000, 100000 };
+            int[] testLengthArr = { 100, 1000, 10000 };
             float[,] ratiosArr = { { 0.04f, 0.02f, 0.02f }, { 0.4f, 0.2f, 0.2f }, { 0.9f, 0.04f, 0.04f }, { 0.25f, 0.25f, 0.25f } };
             for (int length = 0; length < testLengthArr.Length; length++)
             {
                 int N = testLengthArr[length];
                 USER_COUNT = N / 10;
-                for (int ratioIndex = 0; ratioIndex <4; ratioIndex++)
+                for (int ratioIndex = 0; ratioIndex < 4; ratioIndex++)
                 {
-                    for (MODE = 0; MODE < 2;MODE++)
+                    for (MODE = 0; MODE < 3; MODE++)
                     {
                         _dbUser = _db.GetCollection<BsonDocument>("db_test");
                         _cacheUser = _cache.GetCollection<BsonDocument>("db_test");
+                        _redis_cache = new RedisCache(new RedisCacheOptions
+                        { Configuration = "localhost", InstanceName = "db_test" + length + ratioIndex + MODE }
+                        );
                         Console.WriteLine("Test Case: N={0}, MODE: {1}", N, (MODE == NO_CACHE ? "NO CACHE" : MODE == MONGO_CACHE ? "MONGO DB IN MEMMORY CACHE" : "REDIS CACHE"));
                         Console.WriteLine("Insert ratio: {0}, Update ratio: {1}, Delete ratio: {2}", ratiosArr[ratioIndex, 0], ratiosArr[ratioIndex, 1], ratiosArr[ratioIndex, 2]);
                         for (int id = 1; id <= USER_COUNT; id++)
@@ -128,6 +131,7 @@ namespace DotNetCore
                         Console.WriteLine("----------------------------------------------------------------------------------------------------------");
                         _db.DropCollection("db_test");
                         _cache.DropCollection("db_test");
+                        _redis_cache.Dispose();
                     }
 
                 }
@@ -141,48 +145,49 @@ namespace DotNetCore
             int[] idxArray = test.Item2;
 
             Stopwatch stopWatch = new Stopwatch();
-            int[] count = new int[4];
+            //int[] count = new int[4];
 
-            Console.WriteLine("Running {0} records randomly", N);
+            //Console.WriteLine("Running {0} records randomly", N);
             CACHE_Access = 0;
             DB_Access = 0;
 
             for (int index = 0; index < opArray.Length; index++)
             {
+                switch (opArray[index])
+                {
+                    case 0:
+                        {
+                            var new_user_document = new BsonDocument { { "name", "user" + idxArray[index] }, { "user_id", idxArray[index] } };
+                            stopWatch.Start();
+                            AddUser(new_user_document);
+                            stopWatch.Stop();
+                            break;
+                        }
 
-                if (opArray[index] == 0)
-                {
-                    var new_user_document = new BsonDocument { { "name", "user" + idxArray[index] }, { "user_id", idxArray[index] } };
-                    stopWatch.Start();
-                    AddUser(new_user_document);
-                    stopWatch.Stop();
-                }
-                else if (opArray[index] == 1)
-                {
-                    stopWatch.Start();
-                    UpdateUser(idxArray[index]);
-                    stopWatch.Stop();
-                }
-                else if (opArray[index] == 2)
-                {
-                    stopWatch.Start();
-                    DeleteUser(idxArray[index]);
-                    stopWatch.Stop();
-                }
-                else if (opArray[index] == 3)
-                {
-                    stopWatch.Start();
-                    GetUser(idxArray[index]);
-                    stopWatch.Stop();
+                    case 1:
+                        stopWatch.Start();
+                        UpdateUser(idxArray[index]);
+                        stopWatch.Stop();
+                        break;
+                    case 2:
+                        stopWatch.Start();
+                        DeleteUser(idxArray[index]);
+                        stopWatch.Stop();
+                        break;
+                    case 3:
+                        stopWatch.Start();
+                        GetUser(idxArray[index]);
+                        stopWatch.Stop();
+                        break;
                 }
 
-                count[opArray[index]]++;
+                //count[opArray[index]]++;
             }
 
             TimeSpan fullTime = stopWatch.Elapsed;
 
             Console.WriteLine("FULLTIME: " + fullTime.TotalMilliseconds + "ms");
-            Console.WriteLine("Insert:{0}  Update:{1}  Delete:{2}  Find:{3}", count[0], count[1], count[2], count[3]);
+            //Console.WriteLine("Insert:{0}  Update:{1}  Delete:{2}  Find:{3}", count[0], count[1], count[2], count[3]);
             Console.WriteLine("IN DB: " + DB_Access + "  IN CACHE: " + CACHE_Access);
         }
 
